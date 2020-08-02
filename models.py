@@ -26,7 +26,8 @@ def _gaussian_kernel(distances, gamma=1):
 class Actor(nn.Module):
   def __init__(self, state_size, action_size, hidden_size):
     super().__init__()
-    self.actor = nn.Sequential(nn.Linear(state_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, action_size))
+    self.actor = nn.Sequential(nn.Linear(state_size, hidden_size), nn.Tanh(), nn.Linear(
+        hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, action_size))
 
   def forward(self, state):
     policy = Categorical(logits=self.actor(state))
@@ -36,7 +37,8 @@ class Actor(nn.Module):
 class Critic(nn.Module):
   def __init__(self, state_size, hidden_size):
     super().__init__()
-    self.critic = nn.Sequential(nn.Linear(state_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, 1))
+    self.critic = nn.Sequential(nn.Linear(state_size, hidden_size), nn.Tanh(
+    ), nn.Linear(hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, 1))
 
   def forward(self, state):
     value = self.critic(state).squeeze(dim=1)
@@ -62,13 +64,16 @@ class GAILDiscriminator(nn.Module):
   def __init__(self, state_size, action_size, hidden_size, state_only=False):
     super().__init__()
     self.action_size, self.state_only = action_size, state_only
-    input_layer = nn.Linear(state_size if state_only else state_size + action_size, hidden_size)
-    self.discriminator = nn.Sequential(input_layer, nn.Tanh(), nn.Linear(hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, 1), nn.Sigmoid())
+    input_layer = nn.Linear(
+        state_size if state_only else state_size + action_size, hidden_size)
+    self.discriminator = nn.Sequential(input_layer, nn.Tanh(), nn.Linear(
+        hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, 1), nn.Sigmoid())
 
   def forward(self, state, action):
-    D = self.discriminator(state if self.state_only else _join_state_action(state, action, self.action_size)).squeeze(dim=1)
+    D = self.discriminator(state if self.state_only else _join_state_action(
+        state, action, self.action_size)).squeeze(dim=1)
     return D
-  
+
   def predict_reward(self, state, action):
     D = self.forward(state, action)
     return torch.log(D) - torch.log1p(-D)
@@ -81,13 +86,18 @@ class GMMILDiscriminator(nn.Module):
     self.gamma_1, self.gamma_2 = None, None
 
   def predict_reward(self, state, action, expert_state, expert_action):
-    state_action = state if self.state_only else _join_state_action(state, action, self.action_size)
-    expert_state_action = expert_state if self.state_only else _join_state_action(expert_state, expert_action, self.action_size)
-    
+    state_action = state if self.state_only else _join_state_action(
+        state, action, self.action_size)
+    expert_state_action = expert_state if self.state_only else _join_state_action(
+        expert_state, expert_action, self.action_size)
+
     # Use median heuristics to set data-dependent bandwidths
     if self.gamma_1 is None:
-      self.gamma_1 = 1 / _squared_distance(state_action, expert_state_action).median().item()
-      self.gamma_2 = 1 / _squared_distance(expert_state_action, expert_state_action).median().item()
+      self.gamma_1 = 1 / \
+          _squared_distance(state_action, expert_state_action).median().item()
+      self.gamma_2 = 1 / \
+          _squared_distance(expert_state_action,
+                            expert_state_action).median().item()
 
     # Return sum of maximum mean discrepancies
     distances = _squared_distance(state_action, expert_state_action)
@@ -99,8 +109,10 @@ class AIRLDiscriminator(nn.Module):
     super().__init__()
     self.action_size, self.state_only = action_size, state_only
     self.discount = discount
-    self.g = nn.Linear(state_size if state_only else state_size + action_size, 1)  # Reward function r
-    self.h = nn.Sequential(nn.Linear(state_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, 1))  # Shaping function Φ
+    self.g = nn.Linear(state_size if state_only else state_size +
+                       action_size, 1)  # Reward function r
+    self.h = nn.Sequential(nn.Linear(state_size, hidden_size), nn.Tanh(), nn.Linear(
+        hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, 1))  # Shaping function Φ
 
   def reward(self, state, action):
     return self.g(state if self.state_only else _join_state_action(state, action, self.action_size)).squeeze(dim=1)
@@ -109,7 +121,8 @@ class AIRLDiscriminator(nn.Module):
     return self.h(state).squeeze(dim=1)
 
   def forward(self, state, action, next_state, policy, terminal):
-    f = self.reward(state, action) + (1 - terminal) * (self.discount * self.value(next_state) - self.value(state))
+    f = self.reward(state, action) + (1 - terminal) * \
+        (self.discount * self.value(next_state) - self.value(state))
     f_exp = f.exp()
     return f_exp / (f_exp + policy)
 
@@ -121,7 +134,8 @@ class AIRLDiscriminator(nn.Module):
 class EmbeddingNetwork(nn.Module):
   def __init__(self, input_size, hidden_size):
     super().__init__()
-    self.embedding = nn.Sequential(nn.Linear(input_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, input_size))
+    self.embedding = nn.Sequential(nn.Linear(input_size, hidden_size), nn.Tanh(), nn.Linear(
+        hidden_size, hidden_size), nn.Tanh(), nn.Linear(hidden_size, input_size))
 
   def forward(self, input):
     return self.embedding(input)
@@ -132,16 +146,21 @@ class REDDiscriminator(nn.Module):
     super().__init__()
     self.action_size, self.state_only = action_size, state_only
     self.gamma = None
-    self.predictor = EmbeddingNetwork(state_size if state_only else state_size + action_size, hidden_size)
-    self.target = EmbeddingNetwork(state_size if state_only else state_size + action_size, hidden_size)
+    self.predictor = EmbeddingNetwork(
+        state_size if state_only else state_size + action_size, hidden_size)
+    self.target = EmbeddingNetwork(
+        state_size if state_only else state_size + action_size, hidden_size)
     for param in self.target.parameters():
       param.requires_grad = False
 
   def forward(self, state, action):
-    state_action = state if self.state_only else _join_state_action(state, action, self.action_size)
-    prediction, target = self.predictor(state_action), self.target(state_action)
+    state_action = state if self.state_only else _join_state_action(
+        state, action, self.action_size)
+    prediction, target = self.predictor(
+        state_action), self.target(state_action)
     return prediction, target
 
-  def predict_reward(self, state, action, sigma=1):  # TODO: Set sigma based such that r(s, a) from expert demonstrations ≈ 1
+  # TODO: Set sigma based such that r(s, a) from expert demonstrations ≈ 1
+  def predict_reward(self, state, action, sigma=1):
     prediction, target = self.forward(state, action)
     return _gaussian_kernel(F.pairwise_distance(prediction, target, p=2).pow(2), gamma=1)
